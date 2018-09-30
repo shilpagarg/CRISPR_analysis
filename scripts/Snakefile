@@ -1,51 +1,53 @@
 ids, = glob_wildcards("input/P{id}_R1.fastq.gz")
 idsgrna, = glob_wildcards("input/gRNA_{idgrna}.fasta")
+ref,= glob_wildcards("input/ref_{refe}.fasta")
 rule master:
 	input:
 		expand('subs/P{reads}.vcf', reads = ids),
-		expand('alignment/sorted/{grna}.sorted.bam', grna = idsgrna)
+		expand('subs/ref_{references}.fasta.bwt', references = ref),
+		expand('alignment/sorted/gRNA_{grna}.sorted.bam', grna = idsgrna)
 	message: 'MASTER rule'
 
 rule index_ref:
-	input: 'input/reference.fasta'
-	output: 'output/reference.fasta.bwt'
+	input: 'input/ref_{references}.fasta'
+	output: 'output/ref_{references}.fasta.bwt'
 	shell: 'bwa index {input} && samtools faidx {input}'
 
 
 rule align_grna_ref:
-	input: 'input/reference.fasta', 'input/{grna}.fasta', 
-	output: 'alignment/{grna}.bam', 
-	log: 'output/{grna}.bam.log'
+	input: 'input/ref_{references}.fasta', 'input/gRNA_gRNA_{grna}.fasta', 
+	output: 'alignment/gRNA_{grna}.ref_{references}.bam', 
+	log: 'output/gRNA_{grna}.ref_{references}.bam.log'
 	message: 'Creating {output}'
 	threads: 2
 	shell: 'bwa mem -t12 {input[0]} {input[1]} | samtools view -Sb - > {output[0]} 2> {log}'
 
 rule sort_grnaalns:
-	input: 'alignment/{grna}.bam'
-	output:'alignment/sorted/{grna}.sorted.bam', 'alignment/sorted/{grna}.sorted.bam.bai'
-	log: 'alignment/sorted/{grna}.sorted.bam.log'
+	input: 'alignment/gRNA_{grna}.ref_{references}.bam'
+	output:'alignment/sorted/gRNA_{grna}.ref_{references}.sorted.bam', 'alignment/sorted/gRNA_{grna}.ref_{references}.sorted.bam.bai'
+	log: 'alignment/sorted/gRNA_{grna}.ref_{references}.sorted.bam.log'
 	shell: 'picard SortSam VALIDATION_STRINGENCY=LENIENT MAX_RECORDS_IN_RAM=50000 SORT_ORDER=coordinate CREATE_INDEX=true CREATE_MD5_FILE=true I={input[0]} O={output[0]}) > {log} 2>&1'
 
 rule align_edited:
-	input: 'input/reference.fasta', 'input/P{reads}_R1.fastq.gz', 'input/P{reads}_R2.fastq.gz'
-	output: 'alignment/P{reads}.bam'
-	log: 'alignment/P{reads}.bam.log'
+	input: 'input/ref_{references}.fasta', 'input/P{reads}_R1.fastq.gz', 'input/P{reads}_R2.fastq.gz'
+	output: 'alignment/P{reads}.ref_{references}.bam'
+	log: 'alignment/P{reads}.ref_{references}.bam.log'
 	shell: 'bwa mem -t12 {input[0]} {input[1]} {input[2]} | samtools view -Sb - > {output[0]} 2> {log}'
 
 rule sort_readalns:
-	input: 'alignment/P{reads}.bam'
-	output:'alignment/sorted/P{reads}.srt.bam',
-	log: 'alignment/sorted/P{reads}.srt.bam.log'
+	input: 'alignment/P{reads}.ref_{references}.bam'
+	output:'alignment/sorted/P{reads}.ref_{references}.srt.bam',
+	log: 'alignment/sorted/P{reads}.ref_{references}.srt.bam.log'
 	shell: 'picard SortSam VALIDATION_STRINGENCY=LENIENT MAX_RECORDS_IN_RAM=50000 SORT_ORDER=coordinate CREATE_INDEX=true CREATE_MD5_FILE=true I={input[0]} O={output[0]} > {log} 2>&1'
 
 rule call_submutations:
-	input: 'alignment/sorted/P{reads}.srt.bam', 'input/reference.fasta'
-	output: 'subs/P{reads}.vcf'
-	log: 'subs/P{reads}.vcf.log'
+	input: 'alignment/sorted/P{reads}.ref_{references}.srt.bam', 'input/ref_{references}.fasta'
+	output: 'subs/P{reads}.ref_{references}.vcf'
+	log: 'subs/P{reads}.ref_{references}.vcf.log'
 	shell: 'freebayes -f {input[1]} {input[0]} > {output} 2> {log}'
 
 rule subs_analysis:
-	input: 'subs/P{reads}.vcf', 'alignment/sorted/P{reads}.srt.bam'
-	output: 'phase/P{reads}.vcf', 'phase/P{reas}.pdf'
-	log: 'phase/P{reads}.vcf.log'
+	input: 'subs/P{reads}.ref_{references}.vcf', 'alignment/sorted/P{reads}.ref_{references}.srt.bam'
+	output: 'phase/P{reads}.ref_{references}.vcf', 'phase/P{reas}.ref_{references}.pdf'
+	log: 'phase/P{reads}.ref_{references}.vcf.log'
 	shell: 'whatshap phase --ignore-read-groups {input[0]} {input[1]} -o {output[0]} --output-plot {output[1]} > {log} 2>&1'
