@@ -50,4 +50,4 @@ rule subs_analysis:
 	input: 'subs/P{reads}.ref_{references}.vcf', 'alignment/sorted/P{reads}.ref_{references}.srt.bam'
 	output: 'phase/P{reads}.ref_{references}.vcf', 'phase/P{reas}.ref_{references}.pdf'
 	log: 'phase/P{reads}.ref_{references}.vcf.log'
-	shell: 'whatshap phase --ignore-read-groups {input[0]} {input[1]} -o {output[0]} --output-plot {output[1]} > {log} 2>&1'
+	shell: 'whatshap phase --ignore-read-groups --indels {input[0]} {input[1]} -o {output[0]} --output-plot {output[1]} > {log} 2>&1'
