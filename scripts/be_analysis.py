@@ -46,8 +46,9 @@ for read in samfile.fetch():
 	for i in range(ws,we+1):
 		if str(i) in vcfx:
 			if vcfx[str(i)][0] == at:
-				if len(datax[str(i)])>0:
-					outfile.write(str(i) + "\t" + str(datax[str(i)][0]) + "\t" + str(datax[str(i)][1]) + "\t" + str(datax[str(i)][2])  + "\t" + str(datax[str(i)][3]) + "\t" + str(at) + "\n")	
+				# in datax pos is 0-based
+				if len(datax[str(i-1)])>0:
+					outfile.write(str(i) + "\t" + str(datax[str(i-1)][0]) + "\t" + str(datax[str(i-1)][1]) + "\t" + str(datax[str(i-1)][2])  + "\t" + str(datax[str(i-1)][3]) + "\t" + str(at) + "\n")	
 
 		
 	

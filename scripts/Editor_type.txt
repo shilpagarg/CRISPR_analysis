@@ -1,0 +1,15 @@
+Editor	PAM	Nucleotide	Window Start	Window End
+Cas9	NGG	-	-	-
+SpCas9	NGG	-	-	-
+SaCas9	NNGRRT	-	-	-
+Cpf1	-	-	-	-
+xCas9	NG	-	-	-
+BE4-gam	NGG	C	3	9
+dBE4-gam	NGG	C	3	9
+xBE4	NG	C	3	9
+BE	NGG	C	3	9
+SaK	NNNRRT	C	2	12
+SaBE	NNGRRT	C	2	12
+ABE	NGG	A	4	8
+dABE	NGG	A	4	8
+xABE	NG	A	4	8
