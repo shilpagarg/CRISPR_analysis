@@ -1,32 +1,37 @@
 ids, = glob_wildcards("input/P{id}_R1.fastq.gz")
+print(ids)
 idsgrna, = glob_wildcards("input/gRNA_{idgrna}.fasta")
 ref,= glob_wildcards("input/ref_{refe}.fasta")
+
+whatshap = './scripts2/whatshap/venv/bin/whatshap'
 rule master:
 	input:
-		expand('subs/P{reads}.vcf', reads = ids),
-		expand('subs/ref_{references}.fasta.bwt', references = ref),
-		expand('alignment/sorted/gRNA_{grna}.sorted.bam', grna = idsgrna)
+		expand('subs/P{reads}.ref_{references}.vcf', reads = ids, references = ref),
+		expand('input/ref_{references}.fasta.bwt', references = ref),
+		expand('alignment/sorted/gRNA_{grna}.ref_{references}.sorted.bam', grna = idsgrna, references=ref),
+		expand('phase/P{reads}.ref_{references}.vcf', references = ref, reads = ids),
+		expand('P{reads}.ref_{references}.log', references = ref, reads = ids)
 	message: 'MASTER rule'
 
 rule index_ref:
 	input: 'input/ref_{references}.fasta'
-	output: 'output/ref_{references}.fasta.bwt'
+	output: 'input/ref_{references}.fasta.bwt'
 	shell: 'bwa index {input} && samtools faidx {input}'
 
 
 rule align_grna_ref:
-	input: 'input/ref_{references}.fasta', 'input/gRNA_gRNA_{grna}.fasta', 
+	input: 'input/ref_{references}.fasta', 'input/gRNA_{grna}.fasta', 
 	output: 'alignment/gRNA_{grna}.ref_{references}.bam', 
 	log: 'output/gRNA_{grna}.ref_{references}.bam.log'
 	message: 'Creating {output}'
 	threads: 2
-	shell: 'bwa mem -t12 {input[0]} {input[1]} | samtools view -Sb - > {output[0]} 2> {log}'
+	shell: 'bwa mem -t12 -k 2 -r 2 -T 0 {input[0]} {input[1]} | samtools view -Sb - > {output[0]} 2> {log}'
 
 rule sort_grnaalns:
 	input: 'alignment/gRNA_{grna}.ref_{references}.bam'
-	output:'alignment/sorted/gRNA_{grna}.ref_{references}.sorted.bam', 'alignment/sorted/gRNA_{grna}.ref_{references}.sorted.bam.bai'
+	output:'alignment/sorted/gRNA_{grna}.ref_{references}.sorted.bam', 
 	log: 'alignment/sorted/gRNA_{grna}.ref_{references}.sorted.bam.log'
-	shell: 'picard SortSam VALIDATION_STRINGENCY=LENIENT MAX_RECORDS_IN_RAM=50000 SORT_ORDER=coordinate CREATE_INDEX=true CREATE_MD5_FILE=true I={input[0]} O={output[0]}) > {log} 2>&1'
+	shell: 'picard SortSam VALIDATION_STRINGENCY=LENIENT MAX_RECORDS_IN_RAM=50000 SORT_ORDER=coordinate CREATE_INDEX=true CREATE_MD5_FILE=true I={input[0]} O={output[0]} > {log} 2>&1'
 
 rule align_edited:
 	input: 'input/ref_{references}.fasta', 'input/P{reads}_R1.fastq.gz', 'input/P{reads}_R2.fastq.gz'
@@ -48,6 +53,11 @@ rule call_submutations:
 
 rule subs_analysis:
 	input: 'subs/P{reads}.ref_{references}.vcf', 'alignment/sorted/P{reads}.ref_{references}.srt.bam'
-	output: 'phase/P{reads}.ref_{references}.vcf', 'phase/P{reas}.ref_{references}.pdf'
+	output: 'phase/P{reads}.ref_{references}.vcf', 'P{reads}.ref_{references}.txt'
 	log: 'phase/P{reads}.ref_{references}.vcf.log'
-	shell: 'whatshap phase --ignore-read-groups --indels {input[0]} {input[1]} -o {output[0]} --output-plot {output[1]} > {log} 2>&1'
+	shell: '{whatshap} phase --max-coverage 1000000000  --ignore-read-groups {input[0]} {input[1]} -o {output[0]} --output-plot {output[1]} > {log} 2>&1'
+
+rule window_analysis:
+	input: 'input/Editor_type.txt', 'alignment/sorted/gRNA_and_sequences.ref_line1.sorted.bam', 'P{reads}.ref_{references}.txt', 'subs/P{reads}.ref_{references}.vcf',
+	output: 'P{reads}.ref_{references}.log'
+	shell: 'python3 be_analysis.py {input[0]} {input[1]} {input[2]} {input[3]} {output}'
