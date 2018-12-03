@@ -3,15 +3,22 @@ idsgrna, = glob_wildcards("input/gRNA_{idgrna}.fasta")
 ref,= glob_wildcards("input/ref_{refe}.fasta")
 
 # assume refrence index is available
+
 ref1, stuff = zip(*[(ref.split('_')[0], "_".join(ref.split('_')[1:])) for ref in glob_wildcards("input/{refs}_R1.fastq.gz")[0]])
 
 def valid_combinations():
 	for r, s in zip(ref1, stuff):
 		yield "{}_{}.ref_{}.log".format(r,s,r)
+
+def valid_combinations_indel():
+        for r, s in zip(ref1, stuff):
+                yield "{}_{}.ref_{}.indel.log".format(r,s,r)
 rule master:
 	input:
 		valid_combinations(),
-		expand('{reads}.ref_{references}.txt', reads = ids, references = ref),
+		valid_combinations_indel(),
+		#expand('{reads}.ref_{references}.txt', reads = ids, references = ref),
+		#expand('alignment/sorted/gRNA_{grna}.ref_{references}.sorted.bam', grna = idsgrna, references=ref),
 	message: 'MASTER rule'
 
 rule index_ref:
@@ -52,12 +59,6 @@ rule call_submutations:
 	log: 'subs/{reads}.ref_{references}.vcf.log'
 	shell: 'samtools mpileup -d 1000000 -Q 0 -t AD,ADF,AD -ugf {input[1]} {input[0]} | bcftools call -mO z -Am -O v > {output} 2> {log}'
 
-rule call_indels:
-	input: 'alignment/sorted/{reads}.ref_{references}.srt.bam', 'input/ref_{references}.fasta'
-	output: 'subs/{reads}.ref_{references}.indels.vcf' , 'alignment/sorted/{reads}.ref_{references}.rd.bam', 
-	log: 'subs/{reads}.ref_{references}.indels.vcf.log'
-	shell: 'picard AddOrReplaceReadGroups I={input[0]} O={output[1]} RGID=4 RGPL=illumina RGPU=unit1 RGSM=20 RGLB=lib1 && samtools index {output[1]} && ./gatk-4.0.11.0/gatk-4.0.11.0/gatk --java-options "-Xmx8G" HaplotypeCaller -R {input[1]} -I {output[1]} -O {output[0]} 2> {log}'
-
 rule subs_analysis1:
 	input: 'subs/{reads}.ref_{references}.vcf'
 	output: temp('{reads}.ref_{references}.txt')
@@ -69,3 +70,21 @@ rule be_analysis:
                aln='alignment/sorted/gRNA_{ref}.ref_{ref}.sorted.bam'
 	output: '{ref}_{something}_{ref}.log'
 	shell: 'python3 be_analysis.py {input.e_type} {input.aln} {input.sub} {output}'
+
+rule indels_analysis:
+	input: grna = 'alignment/sorted/gRNA_{ref}.ref_{ref}.sorted.bam',
+		bam = 'alignment/sorted/{ref}_{something}_{ref}.srt.bam',
+	output: '{ref}_{something}_{ref}.indel.log'
+	run:
+		import pysam
+		bam = input.grna
+		print(bam)
+		bamfile = pysam.AlignmentFile(str(bam), 'rb')
+		for read in bamfile:
+			val = read.pos
+
+		start = int(val) + 1
+		end = start + 30
+		shell('samtools view -h {input.bam} {wildcards.ref}:{start}-{end} | samtools view -Sb - > alignment/sorted/{wildcards.ref}_{wildcards.something}_{wildcards.ref}.window.srt.bam')
+		shell('python3 indel_analysis.py alignment/sorted/{wildcards.ref}_{wildcards.something}_{wildcards.ref}.window.srt.bam {output}') 
+		shell('rm alignment/sorted/{wildcards.ref}_{wildcards.something}_{wildcards.ref}.window.srt.bam')
