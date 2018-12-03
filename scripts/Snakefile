@@ -1,16 +1,30 @@
-ids, = glob_wildcards("input/P{id}_R1.fastq.gz")
-print(ids)
+ids, = glob_wildcards("input/{id}_R1.fastq.gz")
+#print(ids)
 idsgrna, = glob_wildcards("input/gRNA_{idgrna}.fasta")
 ref,= glob_wildcards("input/ref_{refe}.fasta")
 
-whatshap = './scripts2/whatshap/venv/bin/whatshap'
+# assume refrence index is available
+whatshap = '../scripts2/whatshap/venv/bin/whatshap'
+
+ref1, stuff = zip(*[(ref.split('_')[0], "_".join(ref.split('_')[1:])) for ref in glob_wildcards("input/{refs}_R1.fastq.gz")[0]])
+
+def valid_combinations():
+	for r, s in zip(ref1, stuff):
+		yield "{}_{}.ref_{}.log".format(r,s,r)
+		print(r,s,r)
+
 rule master:
 	input:
-		expand('subs/P{reads}.ref_{references}.vcf', reads = ids, references = ref),
-		expand('input/ref_{references}.fasta.bwt', references = ref),
-		expand('alignment/sorted/gRNA_{grna}.ref_{references}.sorted.bam', grna = idsgrna, references=ref),
-		expand('phase/P{reads}.ref_{references}.vcf', references = ref, reads = ids),
-		expand('P{reads}.ref_{references}.log', references = ref, reads = ids)
+		valid_combinations(),
+		expand('{reads}.ref_{references}.txt', reads = ids, references = ref),
+		#expand('{references}_{be}_{extra}.ref_{references}.log', references = ref, be=idsgrna),
+		#expand('subs/{reads}.ref_{references}_1.vcf', reads = ids, references = ref),
+		#expand('{ref}_{something}_{ref}.log', ref=ref, something=stuff),
+		#expand('input/ref_{references}.fasta.bwt', references = ref),
+		#expand('alignment/sorted/gRNA_{grna}.ref_{references}.sorted.bam', grna = idsgrna, references=ref),
+		#expand('phase/{reads}.ref_{references}_1.vcf', references = ref, reads = ids),
+		#expand('{reads}.ref_{references}.log', references = ref, reads = ids),
+		#expand('{reads}.ref_{references}.txt', references = ref, reads = ids)
 	message: 'MASTER rule'
 
 rule index_ref:
@@ -20,7 +34,7 @@ rule index_ref:
 
 
 rule align_grna_ref:
-	input: 'input/ref_{references}.fasta', 'input/gRNA_{grna}.fasta', 
+	input: 'input/ref_{references}.fasta', 'input/gRNA_{grna}.fasta',  
 	output: 'alignment/gRNA_{grna}.ref_{references}.bam', 
 	log: 'output/gRNA_{grna}.ref_{references}.bam.log'
 	message: 'Creating {output}'
@@ -34,30 +48,68 @@ rule sort_grnaalns:
 	shell: 'picard SortSam VALIDATION_STRINGENCY=LENIENT MAX_RECORDS_IN_RAM=50000 SORT_ORDER=coordinate CREATE_INDEX=true CREATE_MD5_FILE=true I={input[0]} O={output[0]} > {log} 2>&1'
 
 rule align_edited:
-	input: 'input/ref_{references}.fasta', 'input/P{reads}_R1.fastq.gz', 'input/P{reads}_R2.fastq.gz'
-	output: 'alignment/P{reads}.ref_{references}.bam'
-	log: 'alignment/P{reads}.ref_{references}.bam.log'
+	input: 'input/ref_{references}.fasta', 'input/{reads}_R1.fastq.gz', 'input/{reads}_R2.fastq.gz'
+	output: 'alignment/{reads}.ref_{references}.bam'
+	log: 'alignment/{reads}.ref_{references}.bam.log'
 	shell: 'bwa mem -t12 {input[0]} {input[1]} {input[2]} | samtools view -Sb - > {output[0]} 2> {log}'
 
 rule sort_readalns:
-	input: 'alignment/P{reads}.ref_{references}.bam'
-	output:'alignment/sorted/P{reads}.ref_{references}.srt.bam',
-	log: 'alignment/sorted/P{reads}.ref_{references}.srt.bam.log'
+	input: 'alignment/{reads}.ref_{references}.bam'
+	output:'alignment/sorted/{reads}.ref_{references}.srt.bam',
+	log: 'alignment/sorted/{reads}.ref_{references}.srt.bam.log'
 	shell: 'picard SortSam VALIDATION_STRINGENCY=LENIENT MAX_RECORDS_IN_RAM=50000 SORT_ORDER=coordinate CREATE_INDEX=true CREATE_MD5_FILE=true I={input[0]} O={output[0]} > {log} 2>&1'
 
 rule call_submutations:
-	input: 'alignment/sorted/P{reads}.ref_{references}.srt.bam', 'input/ref_{references}.fasta'
-	output: 'subs/P{reads}.ref_{references}.vcf'
-	log: 'subs/P{reads}.ref_{references}.vcf.log'
-	shell: 'freebayes -f {input[1]} {input[0]} > {output} 2> {log}'
+	input: 'alignment/sorted/{reads}.ref_{references}.srt.bam', 'input/ref_{references}.fasta'
+	output: 'subs/{reads}.ref_{references}.vcf'
+	log: 'subs/{reads}.ref_{references}.vcf.log'
+	shell: 'samtools mpileup -d 1000000 -Q 0 -t AD,ADF,AD -ugf {input[1]} {input[0]} | bcftools call -mO z -Am -O v > {output} 2> {log}'
 
-rule subs_analysis:
-	input: 'subs/P{reads}.ref_{references}.vcf', 'alignment/sorted/P{reads}.ref_{references}.srt.bam'
-	output: 'phase/P{reads}.ref_{references}.vcf', 'P{reads}.ref_{references}.txt'
-	log: 'phase/P{reads}.ref_{references}.vcf.log'
-	shell: '{whatshap} phase --max-coverage 1000000000  --ignore-read-groups {input[0]} {input[1]} -o {output[0]} --output-plot {output[1]} > {log} 2>&1'
+rule call_indels:
+	input: 'alignment/sorted/{reads}.ref_{references}.srt.bam', 'input/ref_{references}.fasta'
+	output: 'subs/{reads}.ref_{references}.indels.vcf' , 'alignment/sorted/{reads}.ref_{references}.rd.bam', 
+	log: 'subs/{reads}.ref_{references}.indels.vcf.log'
+	#shell: 'samtools mpileup -d 1000000 -Q 0 -t AD,ADF,AD -ugf {input[1]} {input[0]} | bcftools call --skip-variants snps --multiallelic-caller -mO z -Am -O v > {output} 2> {log}'
+	shell: 'picard AddOrReplaceReadGroups I={input[0]} O={output[1]} RGID=4 RGPL=illumina RGPU=unit1 RGSM=20 RGLB=lib1 && samtools index {output[1]} && ./gatk-4.0.11.0/gatk-4.0.11.0/gatk --java-options "-Xmx8G" HaplotypeCaller -R {input[1]} -I {output[1]} -O {output[0]} 2> {log}'
 
-rule window_analysis:
-	input: 'input/Editor_type.txt', 'alignment/sorted/gRNA_and_sequences.ref_line1.sorted.bam', 'P{reads}.ref_{references}.txt', 'subs/P{reads}.ref_{references}.vcf',
-	output: 'P{reads}.ref_{references}.log'
-	shell: 'python3 be_analysis.py {input[0]} {input[1]} {input[2]} {input[3]} {output}'
+rule subs_analysis1:
+	input: 'subs/{reads}.ref_{references}.vcf'
+	output: temp('{reads}.ref_{references}.txt')
+	shell: 'python3 count_analysis_samtools.py {input} {output}'
+
+# for i in ['JAK2', 'S1', 'HERVenv11', 'HL1gR6', 'HL1gR4', 'ABEgR1']; do for j in $i_*_$i.txt; do python3 be_analysis.py input/Editor_type.txt alignment/sorted/gRNA_$i.ref_$i.sorted.bam $j; done; done
+
+rule be_analysis:
+	input: sub='{ref}_{something}_{ref}.txt',
+	       e_type='input/Editor_type.txt',
+               aln='alignment/sorted/gRNA_{ref}.ref_{ref}.sorted.bam'
+	output: '{ref}_{something}_{ref}.log'
+	shell: 'python3 be_analysis.py {input.e_type} {input.aln} {input.sub} {output}'
+
+
+#rule subs_analysis:
+#       input: 'subs/{reads}.ref_{references}_1.vcf', 'alignment/sorted/{reads}.ref_{references}.srt.bam'
+#       output: 'phase/{reads}.ref_{references}_1.vcf', '{reads}.ref_{references}_1.txt'
+#       log: 'phase/{reads}.ref_{references}_1.vcf.log'
+#       shell: """
+#	set +e 
+#	{whatshap} phase --mapq 0 --max-coverage 1000000000  --ignore-read-groups {input[0]} {input[1]} -o {output[0]} --output-plot {output[1]} > {log} 2>&1
+#	exitcode=$?
+#	if [ $exitcode -eq 1 ]
+#	then
+#		exit 1
+#	else
+#		exit 0
+#	fi
+#	"""
+
+
+#rule multi_to_biallelic:
+#	input: 'subs/{reads}.ref_{references}.vcf'
+#	output: 'subs/{reads}.ref_{references}_1.vcf'
+#	shell: 'python3 multi_to_bialleleic.py {input}'
+
+#rule subs_analysis1:
+#	input: 'subs/{reads}.ref_{references}.vcf'
+#	output: '{reads}.ref_{references}.txt'
+#	shell: 'python3 count_analysis_samtools.py {input} {output}'
