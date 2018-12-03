@@ -47,4 +47,5 @@ for read in samfile.fetch():
 		at = str(editorx[be][1])
 	for i in range(ws,we+1):
 		if str(i) in datax:
-			outfile.write(datax[str(i)]+ "\n")
+			outfile.write(datax[str(i)]+ "\n")	
+	
