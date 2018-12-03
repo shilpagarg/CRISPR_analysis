@@ -16,4 +16,4 @@ for record in vcf_reader:
 	else:
 		str2 = str(record.samples[0]['AD'])
 
-	outfile.write(str(record.POS) + "\t" + str(record.REF) + "\t" + str1 + "\t" + str(record.INFO['DP'])  + "\t" + str2 + "\n")	
+	outfile.write(str(record.POS) + "\t" + str(record.REF) + "\t" + str1 + "\t" + str(record.INFO['DP'])  + "\t" + str2 + "\n")
