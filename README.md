@@ -1,6 +1,7 @@
 This tool is designed for the analysis of multiplex base editing in repetitive and non-repetitive regions. In the Church lab, recent efforts are ongoing for the development of safe DNA editors capable of multiplex engineering. This tool can help answer questions like which bases have been edited in the window specific to gRNA, finding percent of reads with indels after editing and so on.
 
 Dependencies: samtools, picard, bwa, snakemake <br/>
+These dependencies can be easily installed using Anaconda.
 
 Directory structure: <br/>
 1. Download Snakefile and other scripts in the current working directory <br/>
