@@ -38,6 +38,9 @@ for read in bamfile:
                         elif cigar_op == 5 or cigar_op == 6:
                                 pass
 
-freq = rd_indel/total
+freq = (rd_indel/total)*100
 out = open(sys.argv[4],'w')
-out.write(str(total) + '\t' + str(rd_indel) + '\t' + str(freq))
+s = bam.split('/')[-1].split('.')[0]
+print(s)
+out.write('sample \t total_reads \t indel_reads \t %indel_reads \n ')
+out.write(s + '\t' + str(total) + '\t' + str(rd_indel) + '\t' + str(freq) + '\n')
